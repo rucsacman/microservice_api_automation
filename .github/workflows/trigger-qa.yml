@@ -16,8 +16,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.PAT_TOKEN_FOR_QA }}
-          # REPLACE 'your-org/qa-automation-repo' with your actual QA repo name
-          repository: your-org/qa-automation-repo
+          repository: rucsacman/qa_testing_automation
           event-type: trigger-api-tests
           client-payload: |
             {
