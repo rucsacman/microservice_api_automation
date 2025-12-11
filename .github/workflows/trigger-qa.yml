@@ -2,16 +2,13 @@ name: Trigger QA Automation
 
 on:
   pull_request:
-    # Trigger on open, update (synchronize), or reopen
     types: [opened, synchronize, reopened]
 
 jobs:
   dispatch-test:
     runs-on: ubuntu-latest
-    steps:
-      # Optional: Add a step here to deploy your microservice and get the URL
-      # e.g., deploy to staging -> output URL
 
+    steps:
       - name: Trigger QA Repository
         uses: peter-evans/repository-dispatch@v3
         with:
@@ -27,4 +24,23 @@ jobs:
               "actor": "${{ github.actor }}",
               "target_url": "https://staging-api.your-domain.com"
             }
-          # Note: 'target_url' should be the URL where your microservice is running.
+
+      - name: Wait for QA Status
+        uses: WyriHaximus/github-action-wait-for-status@v3
+        with:
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          sha: ${{ github.event.pull_request.head.sha }}
+          context: "QA / API Automation"
+          timeout: 600   # 10 minutes
+          interval: 10   # check every 10 seconds
+
+      - name: QA Result Passed
+        if: success()
+        run: echo "QA Passed!"
+
+      - name: QA Result Failed
+        if: failure()
+        run: |
+          echo "❌ QA Failed!"
+          exit 1
