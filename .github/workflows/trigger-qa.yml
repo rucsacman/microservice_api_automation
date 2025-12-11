@@ -1,44 +1,64 @@
-name: Trigger QA Automation
+name: Wait for QA
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
-  dispatch-test:
+  qa-check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger QA Repository
-        uses: peter-evans/repository-dispatch@v3
+      - name: Trigger QA repo workflow
+        id: trigger
+        uses: benc-uk/workflow-dispatch@v1
         with:
+          workflow: qa-workflow.yml
+          repo: target-owner/target-repo
           token: ${{ secrets.PAT_TOKEN_FOR_QA }}
-          repository: rucsacman/qa_testing_automation
-          event-type: trigger-api-tests
-          client-payload: |
-            {
-              "ref": "${{ github.head_ref }}",
-              "sha": "${{ github.event.pull_request.head.sha }}",
-              "pr_number": "${{ github.event.number }}",
-              "repo_name": "${{ github.repository }}",
-              "actor": "${{ github.actor }}",
-              "target_url": "https://staging-api.your-domain.com"
-            }
+          ref: main
 
-      - name: Wait for QA Status
-        uses: WyriHaximus/github-action-wait-for-status@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          waitForCheck: "QA / API Automation"
-          checkInterval: 10
-
-      - name: QA Passed
-        if: success()
-        run: echo "QA Passed!"
-
-      - name: QA Failed
-        if: failure()
+      - name: Wait for QA completion
+        id: wait
         run: |
-          echo "❌ QA Failed!"
+          run_id=""
+          # fetch the latest run for this workflow
+          while [ -z "$run_id" ]; do
+            run_id=$(gh run list \
+              --repo target-owner/target-repo \
+              --workflow qa-workflow.yml \
+              --json databaseId \
+              --jq '.[0].databaseId')
+            sleep 5
+          done
+
+          echo "QA Run ID: $run_id"
+
+          status="in_progress"
+          conclusion=""
+
+          while [ "$status" = "in_progress" ] || [ "$status" = "queued" ]; do
+            data=$(gh run view $run_id \
+              --repo target-owner/target-repo \
+              --json status,conclusion)
+            status=$(echo "$data" | jq -r '.status')
+            conclusion=$(echo "$data" | jq -r '.conclusion')
+
+            echo "Status: $status, Result: $conclusion"
+            sleep 10
+          done
+
+          echo "final_result=$conclusion" >> $GITHUB_OUTPUT
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN_FOR_QA }}
+
+      - name: Fail if QA failed
+        if: steps.wait.outputs.final_result != 'success'
+        run: |
+          echo "❌ QA failed"
           exit 1
+
+      - name: Success
+        if: steps.wait.outputs.final_result == 'success'
+        run: |
+          echo "✅ QA Passed"
