@@ -61,4 +61,4 @@ jobs:
       - name: Success
         if: steps.wait.outputs.final_result == 'success'
         run: |
-          echo "✅ QA Passed"
+          echo "✅ QA Passed ✅"
