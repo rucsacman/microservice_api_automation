@@ -25,16 +25,11 @@ jobs:
               "target_url": "https://staging-api.your-domain.com"
             }
 
-      # ✅ WAIT UNTIL QA WORKFLOW IN OTHER REPO UPDATES COMMIT STATUS
       - name: Wait for QA Status
         uses: WyriHaximus/github-action-wait-for-status@v1
         with:
-          owner: ${{ github.repository_owner }}
-          repo: ${{ github.event.repository.name }}
-          sha: ${{ github.event.pull_request.head.sha }}
-          context: "QA / API Automation"
-          timeout: 600
-          interval: 10
+          waitForCheck: "QA / API Automation"
+          checkInterval: 10
 
       - name: QA Passed
         if: success()
@@ -43,5 +38,5 @@ jobs:
       - name: QA Failed
         if: failure()
         run: |
-          echo "❌ QA Failed"
+          echo "❌ QA Failed!"
           exit 1
