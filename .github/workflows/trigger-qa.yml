@@ -27,6 +27,8 @@ jobs:
 
       - name: Wait for QA Status
         uses: WyriHaximus/github-action-wait-for-status@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           waitForCheck: "QA / API Automation"
           checkInterval: 10
