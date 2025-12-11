@@ -1,0 +1,31 @@
+name: Trigger QA Automation
+
+on:
+  pull_request:
+    # Trigger on open, update (synchronize), or reopen
+    types: [opened, synchronize, reopened]
+
+jobs:
+  dispatch-test:
+    runs-on: ubuntu-latest
+    steps:
+      # Optional: Add a step here to deploy your microservice and get the URL
+      # e.g., deploy to staging -> output URL
+
+      - name: Trigger QA Repository
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PAT_TOKEN_FOR_QA }}
+          # REPLACE 'your-org/qa-automation-repo' with your actual QA repo name
+          repository: your-org/qa-automation-repo
+          event-type: trigger-api-tests
+          client-payload: |
+            {
+              "ref": "${{ github.head_ref }}",
+              "sha": "${{ github.event.pull_request.head.sha }}",
+              "pr_number": "${{ github.event.number }}",
+              "repo_name": "${{ github.repository }}",
+              "actor": "${{ github.actor }}",
+              "target_url": "https://staging-api.your-domain.com"
+            }
+          # Note: 'target_url' should be the URL where your microservice is running.
