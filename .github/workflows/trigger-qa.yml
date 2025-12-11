@@ -5,10 +5,10 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  dispatch-test:
+  dispatch-and-wait:
     runs-on: ubuntu-latest
-
     steps:
+      # 1. Send the signal to start QA
       - name: Trigger QA Repository
         uses: peter-evans/repository-dispatch@v3
         with:
@@ -25,23 +25,47 @@ jobs:
               "targetUrl": "https://staging-api.your-domain.com"
             }
 
-      # ✅ WAIT UNTIL QA WORKFLOW IN OTHER REPO UPDATES COMMIT STATUS
-      - name: Wait for QA Status
-        uses: WyriHaximus/github-action-wait-for-status@v1
-        with:
-          owner: ${{ github.repository_owner }}
-          repo: ${{ github.event.repository.name }}
-          sha: ${{ github.event.pull_request.head.sha }}
-          context: "QA / API Automation"
-          timeout: 60
-          interval: 10
-
-      - name: QA Passed
-        if: success()
-        run: echo "QA Passed!"
-
-      - name: QA Failed
-        if: failure()
+      # 2. Wait for the result (Polling Script)
+      - name: Wait for QA Result
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN_FOR_QA }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          # This context MUST match what is in your QA repo workflow
+          CHECK_NAME: "QA / API Automation"
         run: |
-          echo "❌ QA Failed"
+          echo "🔎 Looking for status check: '$CHECK_NAME' on commit $SHA"
+          echo "⏳ Waiting for QA to finish..."
+
+          # Loop up to 100 times (100 * 10s = ~16 minutes timeout)
+          for i in {1..100}; do
+           
+            # Use GitHub CLI to get the specific status of this commit
+            STATUS=$(gh api "repos/$OWNER/$REPO/commits/$SHA/statuses" \
+              --jq ".[] | select(.context == \"$CHECK_NAME\") | .state" | head -n 1)
+
+            if [[ -z "$STATUS" ]]; then
+              echo "   [$i] Status not found yet (QA might be starting)..."
+            else
+              echo "   [$i] Current QA Status: $STATUS"
+            fi
+
+            # Check if it succeeded
+            if [[ "$STATUS" == "success" ]]; then
+              echo "✅ QA Tests Passed Successfully!"
+              exit 0
+            fi
+
+            # Check if it failed
+            if [[ "$STATUS" == "failure" ]]; then
+              echo "❌ QA Tests Failed!"
+              exit 1
+            fi
+
+            # If pending or running, wait 10 seconds and try again
+            sleep 10
+          done
+
+          echo "⏰ Timeout: QA tests took too long to report back."
           exit 1
